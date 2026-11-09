@@ -1,0 +1,35 @@
+name: 每日更新开奖数据 (23:15 CST)
+on:
+  schedule:
+    - cron: '15 15 * * *'   # 每天 UTC 15:15 = 北京时间 23:15
+                            # （原 22:15 太贴近大乐透 21:25 开奖、约 22:00-22:30 才出结果的时间，容易抓空）
+  workflow_dispatch:         # 支持手动触发
+
+permissions:
+  contents: write
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 抓取最新开奖数据
+        run: python fetch_data.py
+      - name: 提交更新
+        run: |
+          git config user.name "lottery-bot"
+          git config user.email "bot@axk12.github.io"
+          git add data/
+          if git diff --staged --quiet; then
+            echo "没有新开奖数据，跳过提交"
+            exit 0
+          fi
+          git commit -m "📊 自动更新开奖数据 $(date +'%Y-%m-%d')"
+          # 拉取可能并行产生的新提交，避免 push 被拒
+          git pull --rebase origin main
+          git push

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VMAX · 号码池与全历史回测</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121923; --panel2:#0e141c; --line:#1f2b38;
+    --ink:#e6edf3; --dim:#8093a6; --accent:#ff5a36; --ok:#3fb950; --warn:#d29922;
+    --mono:ui-monospace,"SFMono-Regular","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:980px;margin:0 auto;padding:20px 16px 64px}
+  header{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:18px}
+  h1{font-size:19px;margin:0;letter-spacing:.02em}
+  h1 b{color:var(--accent);font-weight:700}
+  .meta{font:12px/1.5 var(--mono);color:var(--dim)}
+  h2{font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:26px 0 10px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .seg{display:inline-flex;background:var(--panel2);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{background:none;border:0;color:var(--dim);padding:8px 13px;font:13px/1 var(--mono);cursor:pointer;border-right:1px solid var(--line)}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:var(--accent);color:#fff}
+  .seg button:disabled{opacity:.35;cursor:not-allowed}
+  .sw{display:inline-flex;align-items:center;gap:7px;font:12px/1 var(--mono);color:var(--dim);cursor:pointer;user-select:none}
+  .sw input{accent-color:var(--accent);width:15px;height:15px}
+  .balls{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 4px}
+  .ball{width:31px;height:31px;border-radius:50%;display:grid;place-items:center;font:13px/1 var(--mono);
+    background:#1b2735;border:1px solid #2c3d50;color:#cfe1f2}
+  .ball.hit{background:rgba(255,90,54,.16);border-color:var(--accent);color:#ffb9a8}
+  .big{font:700 30px/1.1 var(--mono);letter-spacing:-.02em}
+  .lbl{font:11px/1.4 var(--mono);color:var(--dim)}
+  table{width:100%;border-collapse:collapse;font:12.5px/1.5 var(--mono);margin-top:4px}
+  th,td{padding:9px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{color:var(--dim);font-weight:500;font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+  th:first-child,td:first-child{text-align:left}
+  td.mut{color:var(--dim)}
+  tr.cur td{background:rgba(255,90,54,.07)}
+  tr.cur td:first-child{color:var(--accent);font-weight:700}
+  .tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;border:1px solid var(--line);color:var(--dim)}
+  .tag.ok{color:var(--ok);border-color:rgba(63,185,80,.4)}
+  .tag.warn{color:var(--warn);border-color:rgba(210,153,34,.4)}
+  .note{font-size:12.5px;color:var(--dim);line-height:1.75}
+  .note b{color:#cfe1f2}
+  .callout{border-left:3px solid var(--accent);background:rgba(255,90,54,.06);padding:12px 14px;border-radius:0 8px 8px 0;margin-top:12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .grid>div{background:var(--panel);padding:13px 14px}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--dim);border-radius:7px;padding:6px 11px;font:12px/1 var(--mono);cursor:pointer}
+  .btn:hover{color:var(--ink);border-color:#2f4557}
+  .skel{color:var(--dim);font:12px var(--mono)}
+  footer{margin-top:30px;padding-top:16px;border-top:1px solid var(--line);font-size:12px;color:var(--dim);line-height:1.8}
+  @media(max-width:640px){ h1{font-size:17px} .big{font-size:25px} th,td{padding:7px 5px;font-size:11.5px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1><b>VMAX</b> 号码池 · 全历史回测</h1>
+  <div class="meta" id="meta">正在载入历史数据…</div>
+</header>
+
+<h2>取号模式</h2>
+<div class="card">
+  <div class="row">
+    <div class="seg" id="modes"></div>
+    <label class="sw" id="cipherWrap">
+      <input type="checkbox" id="cipher"> 第三种引擎（密码集萃）参与交集
+    </label>
+    <span class="lbl">全部过滤条件已移除，只保留取号引擎本身</span>
+  </div>
+  <div id="expl" class="note" style="margin-top:10px"></div>
+</div>
+
+<h2 id="poolTitle">下一期号码池</h2>
+<div class="card">
+  <div class="row" style="justify-content:space-between">
+    <div>
+      <div class="lbl" id="poolFrom">—</div>
+      <div class="big" id="poolCount">—<span class="lbl" style="font-size:13px"> 个号码</span></div>
+    </div>
+    <div class="row">
+      <button class="btn" id="copy">复制号码</button>
+    </div>
+  </div>
+  <div class="balls" id="balls"></div>
+  <div class="note" id="poolNote"></div>
+</div>
+
+<h2>全历史回测 · 号码池覆盖开奖号码</h2>
+<div class="card">
+  <div class="lbl" id="btScope">—</div>
+  <table id="bt"></table>
+  <div class="callout note" id="verdict"></div>
+  <div class="note" style="margin-top:12px">
+    <b>口径</b>：用 T-1 期开奖号码算出号码池，看 T 期开出的 <span id="kdef">6 个红球</span> 有几个落在池里，即"命中 6 / 5 / 4 红"。
+    命中数是<b>池对开奖号码的覆盖度</b>，不是单注中奖。
+    "随机对照"= 每期按当期真实池均，算纯随机抓同样多个号能覆盖的期望期数（超几何分布）。
+  </div>
+</div>
+
+<h2>四种模式并排对比</h2>
+<div class="card"><table id="cmp"></table></div>
+
+<h2>全包预算器 · 按"每期把池子全买"算真实账</h2>
+<div class="card" id="compound">
+  <div class="row">
+    <label class="sw">每期预算上限
+      <input type="number" id="cb-budget" value="20000" min="2" step="1000" style="width:90px" onchange="drawCompound()"></label>
+    <label class="sw">蓝球/后区
+      <select id="cb-blue" onchange="drawCompound()" style="background:#0e141c;color:#e6edf3;border:1px solid #1f2b38;border-radius:6px;padding:4px">
+        <option value="16">双色球全买 16 个</option><option value="4">买 4 个</option><option value="1">买 1 个</option>
+      </select></label>
+    <label class="sw">年数
+      <input type="number" id="cb-years" value="25" min="1" style="width:60px" onchange="drawCompound()"></label>
+    <span class="lbl">一等奖按 500 万/注、二等奖 15 万/注估价；预算为单票口径（超 2 万官方规则打不出）</span>
+  </div>
+  <div id="cb-out" style="margin-top:10px"></div>
+</div>
+
+<h2>换成真实出票，概率回到开奖规则本身</h2>
+<div class="card">
+  <div class="grid" id="ticket"></div>
+  <div class="lbl" id="ticketAny" style="margin-top:10px"></div>
+  <div class="note" style="margin-top:12px" id="ticketNote"></div>
+</div>
+
+<footer>
+  数据来源：中国福彩网（双色球）、中国体彩网（大乐透），由 <code>.github/workflows/update-data.yml</code> 每日 23:15 抓取增量并合并。<br>
+  算法内核 <code>vmax.js</code> 与旧页面 <code>pro.html</code> 的方法A / 方法B / 交集 / 三引擎交集已做过逐期等价校验（双色球与大乐透各 250 期，8/8 完全一致）。<br>
+  lottery 是独立随机事件，历史号码不携带可预测信息。本页只做展示与校验，不构成任何投注建议。
+</footer>
+</div>
+<script src="vmax.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
