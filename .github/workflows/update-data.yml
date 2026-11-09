@@ -8,6 +8,11 @@ on:
 permissions:
   contents: write
 
+# 同一时刻只允许一个更新任务；手动连点两次也不会互相撞车
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
 jobs:
   update-data:
     runs-on: ubuntu-latest
@@ -30,6 +35,13 @@ jobs:
             exit 0
           fi
           git commit -m "📊 自动更新开奖数据 $(date +'%Y-%m-%d')"
-          # 拉取可能并行产生的新提交，避免 push 被拒
-          git pull --rebase origin main
+          # 与远端并发提交冲突时：data/*.json 是单行长文件，rebase 无法自动合并。
+          # 增量合并下远端分支必然包含相同历史 + 可能更新的期号，因此以远端为准、丢弃本次提交，
+          # 下一天的运行会把缺的期号补上（fetch_data.py 每次都按最新远端数据重新计算）。
+          if ! git -c pull.rebase=true pull --rebase origin main; then
+            git rebase --abort || true
+            git reset --hard origin/main
+            echo "⚠️ 与并发提交冲突，本次让位给远端（下次运行会自动补齐期号）"
+            exit 0
+          fi
           git push
