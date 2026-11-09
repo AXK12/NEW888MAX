@@ -260,6 +260,9 @@ def update(game, filename):
     merged = sorted(by_period.values(), key=lambda x: x['period'])
     if len(merged) < len(old):
         raise RuntimeError('合并后 %d < 本地 %d，拒绝写入' % (len(merged), len(old)))
+    if added == 0:                      # 没有新期号就不改文件，避免每天一次噪音提交
+        print('  无新增期号，保持文件原样（不刷新 updated_at）')
+        return 0
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(os.path.join(DATA_DIR, filename), 'w', encoding='utf-8') as f:
         json.dump({'version': 2,
