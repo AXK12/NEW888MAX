@@ -7,8 +7,9 @@
   正是 workflow 连续失败的直接原因，这里纠正过来。官网留作兜底与交叉校验源。
 
 候选源顺序（逐个尝试，能出合格数据就用，全部失败才报错）：
-  双色球  data.17500.cn/ssq_asc.txt → ssq_asc.xls（带出球顺序）→ cwl.gov.cn 官网
-  大乐透  data.17500.cn/dlt_asc.txt → dlt_asc.xls（带出球顺序）→ dlt2_asc.txt → sporttery.cn 官网
+  双色球  data.17500.cn/ssq_asc.txt → cwl.gov.cn 官网
+  大乐透  data.17500.cn/dlt_asc.txt（带出球顺序）→ dlt2_asc.txt → sporttery.cn 官网
+  注：同名 .xls 是真 OLE 二进制，runner 上没有 xlrd，试过之后确认无收益，已从链路移除。
 
 格式自适应：响应可能是纯文本、HTML 表格伪装成的 .xls，或真正的老式 OLE .xls。
 按魔术字节与内容判定后分别解析，解析结果必须通过逐条校验才会被采用。
@@ -213,12 +214,10 @@ def src_sporttery(game):
 SOURCES = {
     'ssq': [
         ('17500 文本 ssq_asc.txt', src_17500('https://data.17500.cn/ssq_asc.txt', 'ssq', 1000)),
-        ('17500 表格 ssq_asc.xls', src_17500('https://data.17500.cn/ssq_asc.xls', 'ssq', 1000)),
         ('中国福彩网官网', src_cwl('ssq')),
     ],
     'dlt': [
         ('17500 文本 dlt_asc.txt', src_17500('https://data.17500.cn/dlt_asc.txt', 'dlt', 1000)),
-        ('17500 表格 dlt_asc.xls（带出球顺序）', src_17500('https://data.17500.cn/dlt_asc.xls', 'dlt', 1000)),
         ('17500 文本 dlt2_asc.txt', src_17500('https://data.17500.cn/dlt2_asc.txt', 'dlt', 1000)),
         ('中国体彩网官网', src_sporttery('dlt')),
     ],
