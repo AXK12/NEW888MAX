@@ -1,0 +1,52 @@
+name: 探针·数据源可达性（一次性，跑完即删）
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 逐个测试候选数据源
+        run: |
+          python3 - <<'PYEOF'
+          import urllib.request, json, gzip, io, re
+          UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                '(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36')
+          CANDS = [
+            ('ssq', 'cwl.gov.cn 官方', 'https://www.cwl.gov.cn/cwl_admin/front/cwlkj/search/kjxx/findDrawNotice?name=ssq&issueCount=10',
+             {'Referer': 'https://www.cwl.gov.cn/kjxx/ssq/'}),
+            ('dlt', 'sporttery.cn 官方', 'https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry?gameNo=85&provinceId=0&pageSize=5&isVerify=1&pageNo=1',
+             {'Referer': 'https://static.sporttery.cn/'}),
+            ('ssq', 'data.17500.cn 镜像', 'https://data.17500.cn/ssq_asc.txt', {}),
+            ('dlt', 'data.17500.cn 镜像', 'https://data.17500.cn/dlt2_asc.txt', {}),
+            ('ssq', 'datachart.500.com', 'https://datachart.500.com/ssq/history/newinc/history.php?limit=10&sort=0',
+             {'Referer': 'https://datachart.500.com/'}),
+            ('dlt', 'datachart.500.com', 'https://datachart.500.com/dlt/history/newinc/history.php?limit=10&sort=0',
+             {'Referer': 'https://datachart.500.com/'}),
+            ('ssq', 'jc.zhcw.com 中彩网', 'https://jc.zhcw.com/port/client_json.php?callback=cb&transactionType=10011001&issueno=&pageSize=10&lotteryId=1&fc=3',
+             {'Referer': 'https://www.zhcw.com/'}),
+            ('ssq', 'www.zhcw.com 接口', 'https://www.zhcw.com/ucapi/lottery/drawList?paramSetId=1&lotteryId=1&issueCount=10&pageIndex=1&pageSize=10',
+             {'Referer': 'https://www.zhcw.com/'}),
+          ]
+          print(f"{'彩种':<5}{'源':<22}{'状态':<8}{'字节':>9}  样本")
+          for game, name, url, extra in CANDS:
+              h = {'User-Agent': UA, 'Accept': '*/*', 'Accept-Encoding': 'gzip'}
+              h.update(extra)
+              try:
+                  req = urllib.request.Request(url, headers=h)
+                  with urllib.request.urlopen(req, timeout=25) as r:
+                      raw = r.read()
+                      if r.headers.get('Content-Encoding') == 'gzip' or raw[:2] == b'\x1f\x8b':
+                          raw = gzip.GzipFile(fileobj=io.BytesIO(raw)).read()
+                      txt = raw.decode('utf-8', 'replace')
+                      good = ('"state":0' in txt) or ('查询成功' in txt) or ('处理成功' in txt) \
+                             or (len(txt) > 3000 and '开奖' not in txt[:200]) or bool(re.search(r'20\d{5}', txt))
+                      sample = re.sub(r'\s+', ' ', txt)[:64]
+                      print(f"{game:<6}{name:<22}{str(r.status):<8}{len(raw):>9}  {'OK ' if good else '?? '}{sample}")
+              except Exception as e:
+                  print(f"{game:<6}{name:<22}{'ERR':<8}{'-':>9}  {type(e).__name__}: {str(e)[:60]}")
+          print("\n说明：本探针只为确定 runner 出口 IP 能访问哪些源；确定后写进 fetch_data.py 的失败降级链。")
+          PYEOF
